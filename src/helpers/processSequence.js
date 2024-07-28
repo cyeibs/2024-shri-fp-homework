@@ -14,38 +14,78 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
+import {
+  allPass,
+  compose,
+  gt,
+  ifElse,
+  length,
+  lt,
+  mathMod,
+  prop,
+  test,
+  __,
+  andThen,
+  tap,
+} from "ramda";
+import Api from "../tools/api";
 
- const api = new Api();
+const api = new Api();
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+const isLengthValid = allPass([
+  compose(lt(__, 10), length),
+  compose(gt(__, 2), length),
+]);
+const isPositive = compose(gt(__, 0), parseFloat);
+const isNumber = test(/^[0-9.]+$/);
+const isValidNumber = allPass([isLengthValid, isPositive, isNumber]);
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const roundToNumber = compose(Math.round, parseFloat);
+const toBinary = (number) =>
+  api.get("https://api.tech/numbers/base", {
+    from: 10,
+    to: 2,
+    number: number.toString(),
+  });
+const getAnimal = (id) => api.get(`https://animals.tech/${id}`, {});
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+const processBinaryResult = (binaryString) => length(binaryString);
+const square = (x) => x ** 2;
+const remainderBy3 = (x) => mathMod(x, 3);
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+const logAndReturn = (writeLog) => tap(writeLog);
+const extractResult = prop("result");
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+const processValue = ({ writeLog, handleSuccess, handleError }) =>
+  compose(
+    andThen(handleSuccess),
+    andThen(logAndReturn(writeLog)),
+    andThen(extractResult),
+    andThen(getAnimal),
+    andThen(logAndReturn(writeLog)),
+    andThen(remainderBy3),
+    andThen(logAndReturn(writeLog)),
+    andThen(square),
+    andThen(logAndReturn(writeLog)),
+    andThen(processBinaryResult),
+    andThen(logAndReturn(writeLog)),
+    andThen(extractResult),
+    andThen(toBinary),
+    andThen(logAndReturn(writeLog)),
+    async (val) => Promise.resolve(roundToNumber(val))
+  );
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+const validateAndProcess = ({ value, writeLog, handleSuccess, handleError }) =>
+  ifElse(
+    isValidNumber,
+    processValue({ writeLog, handleSuccess, handleError }),
+    () => handleError("ValidationError")
+  )(value);
+
+const processSequence = (params) => {
+  const { value, writeLog } = params;
+  writeLog(value);
+  validateAndProcess(params);
+};
 
 export default processSequence;
